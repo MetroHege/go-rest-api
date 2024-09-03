@@ -112,8 +112,39 @@ func main() {
 
 // Animal handlers
 // Get all animals
+// Get all animals with filtering, sorting, and pagination
+// Get all animals with filtering, sorting, and pagination
 func getAnimals(c *fiber.Ctx) error {
 	var animals []bson.M
+
+	// Filtering
+	filter := bson.M{}
+	if animalName := c.Query("animal_name"); animalName != "" {
+		filter["animal_name"] = bson.M{"$regex": animalName, "$options": "i"}
+	}
+	if speciesName := c.Query("species_name"); speciesName != "" {
+		filter["species_info.species_name"] = bson.M{"$regex": speciesName, "$options": "i"}
+	}
+	if categoryName := c.Query("category_name"); categoryName != "" {
+		filter["category_info.category_name"] = bson.M{"$regex": categoryName, "$options": "i"}
+	}
+
+	// Sorting
+	sort := bson.D{}
+	if sortBy := c.Query("sort_by"); sortBy != "" {
+		sortOrder := 1
+		if c.Query("sort_order") == "desc" {
+			sortOrder = -1
+		}
+		sort = append(sort, bson.E{Key: sortBy, Value: sortOrder})
+	} else {
+		// Default sort by animal_name in ascending order
+		sort = append(sort, bson.E{Key: "animal_name", Value: 1})
+	}
+
+	// Pagination
+	limit := c.QueryInt("limit", 10)
+	skip := c.QueryInt("skip", 0)
 
 	lookupSpeciesStage := bson.D{
 		{Key: "$lookup", Value: bson.D{
@@ -147,6 +178,10 @@ func getAnimals(c *fiber.Ctx) error {
 		}},
 	}
 
+	matchStage := bson.D{
+		{Key: "$match", Value: filter},
+	}
+
 	projectStage := bson.D{
 		{Key: "$project", Value: bson.D{
 			{Key: "_id", Value: 1},
@@ -158,8 +193,20 @@ func getAnimals(c *fiber.Ctx) error {
 		}},
 	}
 
+	sortStage := bson.D{
+		{Key: "$sort", Value: sort},
+	}
+
+	limitStage := bson.D{
+		{Key: "$limit", Value: limit},
+	}
+
+	skipStage := bson.D{
+		{Key: "$skip", Value: skip},
+	}
+
 	cursor, err := animalCollection.Aggregate(context.Background(), mongo.Pipeline{
-		lookupSpeciesStage, unwindSpeciesStage, lookupCategoryStage, unwindCategoryStage, projectStage,
+		lookupSpeciesStage, unwindSpeciesStage, lookupCategoryStage, unwindCategoryStage, matchStage, projectStage, sortStage, skipStage, limitStage,
 	})
 	if err != nil {
 		log.Printf("Error during aggregation: %v", err)
@@ -177,7 +224,6 @@ func getAnimals(c *fiber.Ctx) error {
 				"error": "Internal Server Error",
 			})
 		}
-		log.Printf("Animal: %+v", animal) // Log the animal data
 		animals = append(animals, animal)
 	}
 
