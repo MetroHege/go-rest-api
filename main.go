@@ -15,16 +15,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// Models
+// Point struct
 type Point struct {
 	Type        string    `json:"type" bson:"type"`
 	Coordinates []float64 `json:"coordinates" bson:"coordinates"`
 }
 
+// Category struct
 type Category struct {
 	ID           primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	CategoryName string             `json:"category_name" bson:"category_name"`
 }
 
+// Species struct
 type Species struct {
 	ID          primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	SpeciesName string             `json:"species_name" bson:"species_name"`
@@ -33,6 +37,7 @@ type Species struct {
 	Location    Point              `json:"location" bson:"location"`
 }
 
+// Animal struct
 type Animal struct {
 	ID         primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	AnimalName string             `json:"animal_name" bson:"animal_name"`
@@ -41,10 +46,12 @@ type Animal struct {
 	Location   Point              `json:"location" bson:"location"`
 }
 
+// MongoDB collections
 var animalCollection *mongo.Collection
 var speciesCollection *mongo.Collection
 var categoryCollection *mongo.Collection
 
+// Main function
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -76,16 +83,20 @@ func main() {
 
 	app := fiber.New()
 
+	// Animal routes
 	app.Get("/api/animals", getAnimals)
+	app.Get("/api/animals/:id", getAnimalByID)
 	app.Post("/api/animals", createAnimal)
 	app.Patch("/api/animals/:id", updateAnimal)
 	app.Delete("/api/animals/:id", deleteAnimal)
 
+	// Species routes
 	app.Get("/api/species", getSpecies)
 	app.Post("/api/species", createSpecies)
 	app.Patch("/api/species/:id", updateSpecies)
 	app.Delete("/api/species/:id", deleteSpecies)
 
+	// Category routes
 	app.Get("/api/categories", getCategories)
 	app.Post("/api/categories", createCategory)
 	app.Patch("/api/categories/:id", updateCategory)
@@ -99,27 +110,174 @@ func main() {
 	log.Fatal(app.Listen("0.0.0.0:" + port))
 }
 
+// Animal handlers
+// Get all animals
 func getAnimals(c *fiber.Ctx) error {
-	var animals []Animal
+	var animals []bson.M
 
-	cursor, err := animalCollection.Find(context.Background(), bson.M{})
-	if err != nil {
-		return err
+	lookupSpeciesStage := bson.D{
+		{Key: "$lookup", Value: bson.D{
+			{Key: "from", Value: "species"},
+			{Key: "localField", Value: "species"},
+			{Key: "foreignField", Value: "_id"},
+			{Key: "as", Value: "species_info"},
+		}},
 	}
 
+	unwindSpeciesStage := bson.D{
+		{Key: "$unwind", Value: bson.D{
+			{Key: "path", Value: "$species_info"},
+			{Key: "preserveNullAndEmptyArrays", Value: true},
+		}},
+	}
+
+	lookupCategoryStage := bson.D{
+		{Key: "$lookup", Value: bson.D{
+			{Key: "from", Value: "categories"},
+			{Key: "localField", Value: "species_info.category"},
+			{Key: "foreignField", Value: "_id"},
+			{Key: "as", Value: "category_info"},
+		}},
+	}
+
+	unwindCategoryStage := bson.D{
+		{Key: "$unwind", Value: bson.D{
+			{Key: "path", Value: "$category_info"},
+			{Key: "preserveNullAndEmptyArrays", Value: true},
+		}},
+	}
+
+	projectStage := bson.D{
+		{Key: "$project", Value: bson.D{
+			{Key: "_id", Value: 1},
+			{Key: "animal_name", Value: 1},
+			{Key: "birthdate", Value: 1},
+			{Key: "species", Value: "$species_info.species_name"},
+			{Key: "category", Value: "$category_info.category_name"},
+			{Key: "location", Value: 1},
+		}},
+	}
+
+	cursor, err := animalCollection.Aggregate(context.Background(), mongo.Pipeline{
+		lookupSpeciesStage, unwindSpeciesStage, lookupCategoryStage, unwindCategoryStage, projectStage,
+	})
+	if err != nil {
+		log.Printf("Error during aggregation: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
+	}
 	defer cursor.Close(context.Background())
 
 	for cursor.Next(context.Background()) {
-		var animal Animal
+		var animal bson.M
 		if err := cursor.Decode(&animal); err != nil {
-			return err
+			log.Printf("Error decoding animal: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Internal Server Error",
+			})
 		}
+		log.Printf("Animal: %+v", animal) // Log the animal data
 		animals = append(animals, animal)
+	}
+
+	if err := cursor.Err(); err != nil {
+		log.Printf("Cursor error: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
 	}
 
 	return c.JSON(animals)
 }
 
+// Get an animal by ID
+func getAnimalByID(c *fiber.Ctx) error {
+	animalID := c.Params("id")
+	objID, err := primitive.ObjectIDFromHex(animalID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid ID format",
+		})
+	}
+
+	lookupSpeciesStage := bson.D{
+		{Key: "$lookup", Value: bson.D{
+			{Key: "from", Value: "species"},
+			{Key: "localField", Value: "species"},
+			{Key: "foreignField", Value: "_id"},
+			{Key: "as", Value: "species_info"},
+		}},
+	}
+
+	unwindSpeciesStage := bson.D{
+		{Key: "$unwind", Value: bson.D{
+			{Key: "path", Value: "$species_info"},
+			{Key: "preserveNullAndEmptyArrays", Value: true},
+		}},
+	}
+
+	lookupCategoryStage := bson.D{
+		{Key: "$lookup", Value: bson.D{
+			{Key: "from", Value: "categories"},
+			{Key: "localField", Value: "species_info.category"},
+			{Key: "foreignField", Value: "_id"},
+			{Key: "as", Value: "category_info"},
+		}},
+	}
+
+	unwindCategoryStage := bson.D{
+		{Key: "$unwind", Value: bson.D{
+			{Key: "path", Value: "$category_info"},
+			{Key: "preserveNullAndEmptyArrays", Value: true},
+		}},
+	}
+
+	matchStage := bson.D{
+		{Key: "$match", Value: bson.D{
+			{Key: "_id", Value: objID},
+		}},
+	}
+
+	projectStage := bson.D{
+		{Key: "$project", Value: bson.D{
+			{Key: "_id", Value: 1},
+			{Key: "animal_name", Value: 1},
+			{Key: "birthdate", Value: 1},
+			{Key: "species", Value: "$species_info.species_name"},
+			{Key: "category", Value: "$category_info.category_name"},
+			{Key: "location", Value: 1},
+		}},
+	}
+
+	cursor, err := animalCollection.Aggregate(context.Background(), mongo.Pipeline{
+		matchStage, lookupSpeciesStage, unwindSpeciesStage, lookupCategoryStage, unwindCategoryStage, projectStage,
+	})
+	if err != nil {
+		log.Printf("Error during aggregation: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
+	}
+	defer cursor.Close(context.Background())
+
+	if cursor.Next(context.Background()) {
+		var animal bson.M
+		if err := cursor.Decode(&animal); err != nil {
+			log.Printf("Error decoding animal: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Internal Server Error",
+			})
+		}
+		return c.JSON(animal)
+	}
+
+	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+		"error": "Animal not found",
+	})
+}
+
+// Create an animal
 func createAnimal(c *fiber.Ctx) error {
 	animal := new(Animal)
 
@@ -137,6 +295,7 @@ func createAnimal(c *fiber.Ctx) error {
 	return c.Status(201).JSON(animal)
 }
 
+// Update an animal
 func updateAnimal(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -160,6 +319,7 @@ func updateAnimal(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"success": "true"})
 }
 
+// Delete an animal
 func deleteAnimal(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -176,6 +336,8 @@ func deleteAnimal(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"success": "true"})
 }
 
+// Species handlers
+// Get all species
 func getSpecies(c *fiber.Ctx) error {
 	var species []Species
 
@@ -197,6 +359,7 @@ func getSpecies(c *fiber.Ctx) error {
 	return c.JSON(species)
 }
 
+// Create a species
 func createSpecies(c *fiber.Ctx) error {
 	specie := new(Species)
 
@@ -214,6 +377,7 @@ func createSpecies(c *fiber.Ctx) error {
 	return c.Status(201).JSON(specie)
 }
 
+// Update a species
 func updateSpecies(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -237,6 +401,7 @@ func updateSpecies(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"success": "true"})
 }
 
+// Delete a species
 func deleteSpecies(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -253,6 +418,8 @@ func deleteSpecies(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"success": "true"})
 }
 
+// Category handlers
+// Get all categories
 func getCategories(c *fiber.Ctx) error {
 	var categories []Category
 
@@ -274,6 +441,7 @@ func getCategories(c *fiber.Ctx) error {
 	return c.JSON(categories)
 }
 
+// Create a category
 func createCategory(c *fiber.Ctx) error {
 	category := new(Category)
 
@@ -291,6 +459,7 @@ func createCategory(c *fiber.Ctx) error {
 	return c.Status(201).JSON(category)
 }
 
+// Update a category
 func updateCategory(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -311,6 +480,7 @@ func updateCategory(c *fiber.Ctx) error {
 	return c.Status(200).JSON(fiber.Map{"success": "true"})
 }
 
+// Delete a category
 func deleteCategory(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
