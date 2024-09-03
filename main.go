@@ -92,12 +92,14 @@ func main() {
 
 	// Species routes
 	app.Get("/api/species", getSpecies)
+	app.Get("/api/species/:id", getSpeciesByID)
 	app.Post("/api/species", createSpecies)
 	app.Patch("/api/species/:id", updateSpecies)
 	app.Delete("/api/species/:id", deleteSpecies)
 
 	// Category routes
 	app.Get("/api/categories", getCategories)
+	app.Get("/api/categories/:id", getCategoryByID)
 	app.Post("/api/categories", createCategory)
 	app.Patch("/api/categories/:id", updateCategory)
 	app.Delete("/api/categories/:id", deleteCategory)
@@ -112,8 +114,6 @@ func main() {
 
 // Animal handlers
 // Get all animals
-// Get all animals with filtering, sorting, and pagination
-// Get all animals with filtering, sorting, and pagination
 func getAnimals(c *fiber.Ctx) error {
 	var animals []bson.M
 
@@ -405,6 +405,24 @@ func getSpecies(c *fiber.Ctx) error {
 	return c.JSON(species)
 }
 
+// Get a species by ID
+func getSpeciesByID(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ObjectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid ID"})
+	}
+
+	var specie Species
+	filter := bson.M{"_id": ObjectID}
+	err = speciesCollection.FindOne(context.Background(), filter).Decode(&specie)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(specie)
+}
+
 // Create a species
 func createSpecies(c *fiber.Ctx) error {
 	specie := new(Species)
@@ -487,6 +505,24 @@ func getCategories(c *fiber.Ctx) error {
 	return c.JSON(categories)
 }
 
+// Get a category by ID
+func getCategoryByID(c *fiber.Ctx) error {
+	id := c.Params("id")
+	ObjectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid ID"})
+	}
+
+	var category Category
+	filter := bson.M{"_id": ObjectID}
+	err = categoryCollection.FindOne(context.Background(), filter).Decode(&category)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(category)
+}
+
 // Create a category
 func createCategory(c *fiber.Ctx) error {
 	category := new(Category)
@@ -513,17 +549,31 @@ func updateCategory(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid ID"})
 	}
 
-	filter := bson.M{"_id": ObjectID}
-	update := bson.M{"$set": bson.M{
-		"category_name": c.FormValue("category_name"),
-	}}
-
-	_, err = categoryCollection.UpdateOne(context.Background(), filter, update)
-	if err != nil {
-		return err
+	var updateData struct {
+		CategoryName string `json:"category_name"`
 	}
 
-	return c.Status(200).JSON(fiber.Map{"success": "true"})
+	if err := c.BodyParser(&updateData); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse request body"})
+	}
+
+	fmt.Println("Update Data:", updateData) // Debug statement
+
+	update := bson.M{
+		"$set": bson.M{
+			"category_name": updateData.CategoryName,
+		},
+	}
+
+	filter := bson.M{"_id": ObjectID}
+	result, err := categoryCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update category"})
+	}
+
+	fmt.Println("Update Result:", result) // Debug statement
+
+	return c.JSON(fiber.Map{"message": "Category updated successfully"})
 }
 
 // Delete a category
