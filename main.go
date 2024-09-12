@@ -1,20 +1,3 @@
-// @title Go REST API
-// @version 1.0
-// @description This is a sample server for a Go REST API.
-// @termsOfService http://swagger.io/terms/
-
-// @contact.name API Support
-// @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
-
-// @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-
-// @host localhost:5000
-// @BasePath /api
-
-// @securityDefinitions.basic BasicAuth
-
 package main
 
 import (
@@ -31,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	_ "github.com/MetroHege/go-rest-api/docs"
 	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
@@ -81,6 +65,23 @@ type CategoryUpdateRequest struct {
 var animalCollection *mongo.Collection
 var speciesCollection *mongo.Collection
 var categoryCollection *mongo.Collection
+
+// @title Go REST API
+// @version 1.0
+// @description This is a sample server for a Go REST API.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:5000
+// @BasePath /api
+
+// @securityDefinitions.basic BasicAuth
 
 // Main function
 func main() {
