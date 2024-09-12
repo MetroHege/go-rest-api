@@ -483,23 +483,60 @@ func deleteSpecies(c *fiber.Ctx) error {
 }
 
 // Category handlers
-// Get all categories
+// Get all categories with filtering, sorting, and pagination
 func getCategories(c *fiber.Ctx) error {
 	var categories []Category
 
-	cursor, err := categoryCollection.Find(context.Background(), bson.M{})
-	if err != nil {
-		return err
+	// Filtering
+	filter := bson.M{}
+	if categoryName := c.Query("category_name"); categoryName != "" {
+		filter["category_name"] = bson.M{"$regex": categoryName, "$options": "i"}
 	}
 
+	// Sorting
+	sort := bson.D{}
+	if sortBy := c.Query("sort_by"); sortBy != "" {
+		sortOrder := 1
+		if c.Query("sort_order") == "desc" {
+			sortOrder = -1
+		}
+		sort = append(sort, bson.E{Key: sortBy, Value: sortOrder})
+	} else {
+		// Default sort by category_name in ascending order
+		sort = append(sort, bson.E{Key: "category_name", Value: 1})
+	}
+
+	// Pagination
+	limit := c.QueryInt("limit", 10)
+	skip := c.QueryInt("skip", 0)
+
+	findOptions := options.Find()
+	findOptions.SetSort(sort)
+	findOptions.SetLimit(int64(limit))
+	findOptions.SetSkip(int64(skip))
+
+	cursor, err := categoryCollection.Find(context.Background(), filter, findOptions)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
+	}
 	defer cursor.Close(context.Background())
 
 	for cursor.Next(context.Background()) {
 		var category Category
 		if err := cursor.Decode(&category); err != nil {
-			return err
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Internal Server Error",
+			})
 		}
 		categories = append(categories, category)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
 	}
 
 	return c.JSON(categories)

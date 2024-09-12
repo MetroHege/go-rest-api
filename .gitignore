@@ -2,3 +2,4 @@
 air.toml
 go.mod
 go.sum
+dist

@@ -1,0 +1,289 @@
+openapi: 3.0.0
+info:
+  title: Animal API
+  description: API for managing animals, species, and categories.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000
+    description: Local server
+
+    paths:
+  /api/animals:
+    get:
+      summary: Get all animals
+      responses:
+        '200':
+          description: A list of animals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Animal'
+    post:
+      summary: Create a new animal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Animal'
+      responses:
+        '201':
+          description: Animal created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+  /api/animals/{id}:
+    get:
+      summary: Get an animal by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: An animal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+        '404':
+          description: Animal not found
+    patch:
+      summary: Update an animal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Animal'
+      responses:
+        '200':
+          description: Animal updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Animal'
+    delete:
+      summary: Delete an animal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Animal deleted
+
+  /api/species:
+    get:
+      summary: Get all species
+      responses:
+        '200':
+          description: A list of species
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Species'
+    post:
+      summary: Create a new species
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Species'
+      responses:
+        '201':
+          description: Species created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Species'
+  /api/species/{id}:
+    get:
+      summary: Get a species by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A species
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Species'
+        '404':
+          description: Species not found
+    patch:
+      summary: Update a species
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Species'
+      responses:
+        '200':
+          description: Species updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Species'
+    delete:
+      summary: Delete a species
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Species deleted
+
+  /api/categories:
+    get:
+      summary: Get all categories
+      responses:
+        '200':
+          description: A list of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+    post:
+      summary: Create a new category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+  /api/categories/{id}:
+    get:
+      summary: Get a category by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '404':
+          description: Category not found
+    patch:
+      summary: Update a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+    delete:
+      summary: Delete a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category deleted
+
+          components:
+  schemas:
+    Point:
+      type: object
+      properties:
+        type:
+          type: string
+        coordinates:
+          type: array
+          items:
+            type: number
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+        category_name:
+          type: string
+    Species:
+      type: object
+      properties:
+        _id:
+          type: string
+        species_name:
+          type: string
+        image:
+          type: string
+        category:
+          type: string
+        location:
+          $ref: '#/components/schemas/Point'
+    Animal:
+      type: object
+      properties:
+        _id:
+          type: string
+        animal_name:
+          type: string
+        birthdate:
+          type: string
+          format: date-time
+        species:
+          type: string
+        location:
+          $ref: '#/components/schemas/Point'
