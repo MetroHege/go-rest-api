@@ -59,7 +59,7 @@ func main() {
 	}
 
 	MONGODB_URI := os.Getenv("MONGODB_URI")
-	fmt.Println("MONGODB_URI:", MONGODB_URI) // Debug print
+	fmt.Println("MONGODB_URI:", MONGODB_URI)
 
 	clientOptions := options.Client().ApplyURI(MONGODB_URI)
 	client, err := mongo.Connect(context.Background(), clientOptions)
@@ -383,23 +383,69 @@ func deleteAnimal(c *fiber.Ctx) error {
 }
 
 // Species handlers
-// Get all species
+// Get all species with filtering, sorting, and pagination
 func getSpecies(c *fiber.Ctx) error {
 	var species []Species
 
-	cursor, err := speciesCollection.Find(context.Background(), bson.M{})
-	if err != nil {
-		return err
+	// Filtering
+	filter := bson.M{}
+	if speciesName := c.Query("species_name"); speciesName != "" {
+		filter["species_name"] = bson.M{"$regex": speciesName, "$options": "i"}
+	}
+	if categoryID := c.Query("category_id"); categoryID != "" {
+		objID, err := primitive.ObjectIDFromHex(categoryID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid category ID format",
+			})
+		}
+		filter["category"] = objID
 	}
 
+	// Sorting
+	sort := bson.D{}
+	if sortBy := c.Query("sort_by"); sortBy != "" {
+		sortOrder := 1
+		if c.Query("sort_order") == "desc" {
+			sortOrder = -1
+		}
+		sort = append(sort, bson.E{Key: sortBy, Value: sortOrder})
+	} else {
+		// Default sort by species_name in ascending order
+		sort = append(sort, bson.E{Key: "species_name", Value: 1})
+	}
+
+	// Pagination
+	limit := c.QueryInt("limit", 10)
+	skip := c.QueryInt("skip", 0)
+
+	findOptions := options.Find()
+	findOptions.SetSort(sort)
+	findOptions.SetLimit(int64(limit))
+	findOptions.SetSkip(int64(skip))
+
+	cursor, err := speciesCollection.Find(context.Background(), filter, findOptions)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
+	}
 	defer cursor.Close(context.Background())
 
 	for cursor.Next(context.Background()) {
 		var specie Species
 		if err := cursor.Decode(&specie); err != nil {
-			return err
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Internal Server Error",
+			})
 		}
 		species = append(species, specie)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Internal Server Error",
+		})
 	}
 
 	return c.JSON(species)
@@ -446,23 +492,58 @@ func updateSpecies(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
+		log.Printf("Invalid ID: %v", err)
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid ID"})
 	}
 
-	filter := bson.M{"_id": ObjectID}
-	update := bson.M{"$set": bson.M{
-		"species_name": c.FormValue("species_name"),
-		"image":        c.FormValue("image"),
-		"category":     c.FormValue("category"),
-		"location":     c.FormValue("location"),
-	}}
-
-	_, err = speciesCollection.UpdateOne(context.Background(), filter, update)
-	if err != nil {
-		return err
+	var updateData struct {
+		SpeciesName string `json:"species_name"`
+		Image       string `json:"image"`
+		Category    string `json:"category"`
+		Location    Point  `json:"location"`
 	}
 
-	return c.Status(200).JSON(fiber.Map{"success": "true"})
+	if err := c.BodyParser(&updateData); err != nil {
+		log.Printf("Failed to parse request body: %v", err)
+		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse request body"})
+	}
+
+	log.Printf("Update Data: %+v", updateData)
+
+	update := bson.M{"$set": bson.M{}}
+
+	if updateData.SpeciesName != "" {
+		update["$set"].(bson.M)["species_name"] = updateData.SpeciesName
+	}
+	if updateData.Image != "" {
+		update["$set"].(bson.M)["image"] = updateData.Image
+	}
+	if updateData.Location.Type != "" && len(updateData.Location.Coordinates) == 2 {
+		update["$set"].(bson.M)["location"] = updateData.Location
+	}
+	if updateData.Category != "" {
+		categoryID, err := primitive.ObjectIDFromHex(updateData.Category)
+		if err != nil {
+			log.Printf("Invalid category ID: %v", err)
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid category ID"})
+		}
+		update["$set"].(bson.M)["category"] = categoryID
+	}
+
+	log.Printf("Update BSON: %+v", update)
+
+	filter := bson.M{"_id": ObjectID}
+	result, err := speciesCollection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		log.Printf("Error updating species: %v", err)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update species"})
+	}
+
+	if result.MatchedCount == 0 {
+		return c.Status(404).JSON(fiber.Map{"error": "Species not found"})
+	}
+
+	return c.JSON(fiber.Map{"success": "true"})
 }
 
 // Delete a species
@@ -594,7 +675,7 @@ func updateCategory(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	fmt.Println("Update Data:", updateData) // Debug statement
+	fmt.Println("Update Data:", updateData)
 
 	update := bson.M{
 		"$set": bson.M{
@@ -608,7 +689,7 @@ func updateCategory(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to update category"})
 	}
 
-	fmt.Println("Update Result:", result) // Debug statement
+	fmt.Println("Update Result:", result)
 
 	return c.JSON(fiber.Map{"message": "Category updated successfully"})
 }
