@@ -1,3 +1,20 @@
+// @title Go REST API
+// @version 1.0
+// @description This is a sample server for a Go REST API.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:5000
+// @BasePath /api
+
+// @securityDefinitions.basic BasicAuth
+
 package main
 
 import (
@@ -13,6 +30,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
 // Models
@@ -44,6 +63,18 @@ type Animal struct {
 	Birthdate  time.Time          `json:"birthdate" bson:"birthdate"`
 	Species    primitive.ObjectID `json:"species,omitempty" bson:"species,omitempty"`
 	Location   Point              `json:"location" bson:"location"`
+}
+
+// Response represents a generic API response
+type Response struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+// CategoryUpdateRequest represents the request body for updating a category
+type CategoryUpdateRequest struct {
+	CategoryName string `json:"category_name"`
 }
 
 // MongoDB collections
@@ -83,6 +114,9 @@ func main() {
 
 	app := fiber.New()
 
+	// Swagger route
+	app.Get("/swagger/*", fiberSwagger.WrapHandler)
+
 	// Animal routes
 	app.Get("/api/animals", getAnimals)
 	app.Get("/api/animals/:id", getAnimalByID)
@@ -114,6 +148,21 @@ func main() {
 
 // Animal handlers
 // Get all animals
+// @Summary Get all animals
+// @Description Get all animals with filtering, sorting, and pagination
+// @Tags animals
+// @Accept json
+// @Produce json
+// @Param animal_name query string false "Animal Name"
+// @Param species_name query string false "Species Name"
+// @Param category_name query string false "Category Name"
+// @Param sort_by query string false "Sort By"
+// @Param sort_order query string false "Sort Order"
+// @Param limit query int false "Limit"
+// @Param skip query int false "Skip"
+// @Success 200 {array} Animal
+// @Failure 500 {object} Response
+// @Router /animals [get]
 func getAnimals(c *fiber.Ctx) error {
 	var animals []bson.M
 
@@ -238,6 +287,16 @@ func getAnimals(c *fiber.Ctx) error {
 }
 
 // Get an animal by ID
+// @Summary Get an animal by ID
+// @Description Get an animal by ID
+// @Tags animals
+// @Accept json
+// @Produce json
+// @Param id path string true "Animal ID"
+// @Success 200 {object} Animal
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /animals/{id} [get]
 func getAnimalByID(c *fiber.Ctx) error {
 	animalID := c.Params("id")
 	objID, err := primitive.ObjectIDFromHex(animalID)
@@ -324,6 +383,16 @@ func getAnimalByID(c *fiber.Ctx) error {
 }
 
 // Create an animal
+// @Summary Create an animal
+// @Description Create a new animal
+// @Tags animals
+// @Accept json
+// @Produce json
+// @Param animal body Animal true "Animal"
+// @Success 201 {object} Animal
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /animals [post]
 func createAnimal(c *fiber.Ctx) error {
 	animal := new(Animal)
 
@@ -342,6 +411,17 @@ func createAnimal(c *fiber.Ctx) error {
 }
 
 // Update an animal
+// @Summary Update an animal
+// @Description Update an existing animal
+// @Tags animals
+// @Accept json
+// @Produce json
+// @Param id path string true "Animal ID"
+// @Param animal body Animal true "Animal"
+// @Success 200 {object} Response
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /animals/{id} [patch]
 func updateAnimal(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -366,6 +446,16 @@ func updateAnimal(c *fiber.Ctx) error {
 }
 
 // Delete an animal
+// @Summary Delete an animal
+// @Description Delete an animal by ID
+// @Tags animals
+// @Accept json
+// @Produce json
+// @Param id path string true "Animal ID"
+// @Success 200 {object} Response
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /animals/{id} [delete]
 func deleteAnimal(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -384,6 +474,20 @@ func deleteAnimal(c *fiber.Ctx) error {
 
 // Species handlers
 // Get all species with filtering, sorting, and pagination
+// @Summary Get all species
+// @Description Get all species with filtering, sorting, and pagination
+// @Tags species
+// @Accept json
+// @Produce json
+// @Param species_name query string false "Species Name"
+// @Param category_id query string false "Category ID"
+// @Param sort_by query string false "Sort By"
+// @Param sort_order query string false "Sort Order"
+// @Param limit query int false "Limit"
+// @Param skip query int false "Skip"
+// @Success 200 {array} Species
+// @Failure 500 {object} Response
+// @Router /species [get]
 func getSpecies(c *fiber.Ctx) error {
 	var species []Species
 
@@ -452,6 +556,17 @@ func getSpecies(c *fiber.Ctx) error {
 }
 
 // Get a species by ID
+// @Summary Get a species by ID
+// @Description Get a species by its ID
+// @Tags species
+// @Accept json
+// @Produce json
+// @Param id path string true "Species ID"
+// @Success 200 {object} Species
+// @Failure 400 {object} Response
+// @Failure 404 {object} Response
+// @Failure 500 {object} Response
+// @Router /species/{id} [get]
 func getSpeciesByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -470,6 +585,16 @@ func getSpeciesByID(c *fiber.Ctx) error {
 }
 
 // Create a species
+// @Summary Create a new species
+// @Description Create a new species
+// @Tags species
+// @Accept json
+// @Produce json
+// @Param species body Species true "Species"
+// @Success 201 {object} Species
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /species [post]
 func createSpecies(c *fiber.Ctx) error {
 	specie := new(Species)
 
@@ -488,6 +613,18 @@ func createSpecies(c *fiber.Ctx) error {
 }
 
 // Update a species
+// @Summary Update a species
+// @Description Update a species by its ID
+// @Tags species
+// @Accept json
+// @Produce json
+// @Param id path string true "Species ID"
+// @Param species body Species true "Species"
+// @Success 200 {object} Response
+// @Failure 400 {object} Response
+// @Failure 404 {object} Response
+// @Failure 500 {object} Response
+// @Router /species/{id} [patch]
 func updateSpecies(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -547,6 +684,17 @@ func updateSpecies(c *fiber.Ctx) error {
 }
 
 // Delete a species
+// @Summary Delete a species
+// @Description Delete a species by its ID
+// @Tags species
+// @Accept json
+// @Produce json
+// @Param id path string true "Species ID"
+// @Success 200 {object} Response
+// @Failure 400 {object} Response
+// @Failure 404 {object} Response
+// @Failure 500 {object} Response
+// @Router /species/{id} [delete]
 func deleteSpecies(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -565,6 +713,19 @@ func deleteSpecies(c *fiber.Ctx) error {
 
 // Category handlers
 // Get all categories with filtering, sorting, and pagination
+// @Summary Get all categories
+// @Description Get all categories with filtering, sorting, and pagination
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Param category_name query string false "Category Name"
+// @Param sort_by query string false "Sort By"
+// @Param sort_order query string false "Sort Order"
+// @Param limit query int false "Limit"
+// @Param skip query int false "Skip"
+// @Success 200 {array} Category
+// @Failure 500 {object} Response
+// @Router /categories [get]
 func getCategories(c *fiber.Ctx) error {
 	var categories []Category
 
@@ -624,6 +785,16 @@ func getCategories(c *fiber.Ctx) error {
 }
 
 // Get a category by ID
+// @Summary Get a category by ID
+// @Description Get a category by its ID
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 200 {object} Category
+// @Failure 400 {object} Response
+// @Failure 404 {object} Response
+// @Router /categories/{id} [get]
 func getCategoryByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -642,6 +813,16 @@ func getCategoryByID(c *fiber.Ctx) error {
 }
 
 // Create a category
+// @Summary Create a new category
+// @Description Create a new category
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Param category body Category true "Category"
+// @Success 201 {object} Category
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /categories [post]
 func createCategory(c *fiber.Ctx) error {
 	category := new(Category)
 
@@ -660,6 +841,17 @@ func createCategory(c *fiber.Ctx) error {
 }
 
 // Update a category
+// @Summary Update a category
+// @Description Update a category by ID
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Param category body CategoryUpdateRequest true "Category Data"
+// @Success 200 {object} Response
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /categories/{id} [patch]
 func updateCategory(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
@@ -695,6 +887,16 @@ func updateCategory(c *fiber.Ctx) error {
 }
 
 // Delete a category
+// @Summary Delete a category
+// @Description Delete a category by ID
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 200 {object} Response
+// @Failure 400 {object} Response
+// @Failure 500 {object} Response
+// @Router /categories/{id} [delete]
 func deleteCategory(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ObjectID, err := primitive.ObjectIDFromHex(id)
